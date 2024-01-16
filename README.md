@@ -158,6 +158,7 @@ As this project is a test of my skills and I currently cannot spend too much tim
 - Encryption at rest and in transit (Certificate Manager for HTTPS, KMS, Secret Manager...).
 - Disable default SGs, ACLs, VPC.
 - Follow a tagging convention for every AWS resource.
+- Parameterize missing variables in the template.
 - Split the template into smaller and consistent parts and uploading them to an s3 bucket to reference them from a main file. The tree would look something like this:
 ![tree](media/tree.png) 
 
