@@ -160,6 +160,7 @@ As this project is a test of my skills and I currently cannot spend too much tim
 - Follow a tagging convention for every AWS resource.
 - Parameterize missing variables in the template.
 - Split the template into smaller and consistent parts and uploading them to an s3 bucket to reference them from a main file. The tree would look something like this:
+
 ![tree](media/tree.png) 
 
 Lastly, I would like to clarify that I generally do not use Cloudformation. I usually use Terraform for bigger projects. I find it to be a more comprehensive tool with greater modularity, granularity, reusability, more integrations and less bias. Additionally, It can be used for other cloud providers and for platform-level management.
