@@ -144,6 +144,7 @@ Lastly, execute the command for stack creation:
   --stack-name mozio-mock-cloudformation \
   --template-body file://./templates/main.yml \
   --parameters file://./conf/paremeters-test.json
+  --capabilities CAPABILITY_NAMED_IAM
 ```
 
 Consider adding the "--profile" param if it is not being executed in a CloudShell.
