@@ -1,0 +1,655 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Mock ECS deployment
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: An environment name that will be prefixed to resource names
+    Default: 'test'
+  Project:
+    Type: String
+    Description: The name of the project
+    Default: 'mozio'
+  RegionAlias:
+    Type: String
+    Description: The region where the stack is deployed
+    Default: 'useast2'
+  EcrRepositoryUri:
+    Type: String
+    Description: The URI of the ECR repository
+    Default: '637423402770.dkr.ecr.us-east-2.amazonaws.com/mozio-test-useast2-repo:1.0.0'
+  VpcCIDR:
+    Type: String
+    Description: IP range (CIDR notation) for this VPC
+    Default: '10.0.0.0/16'
+  PublicSubnetOneCIDR:
+    Type: String 
+    Description: IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Default: '10.0.0.0/24'
+  PublicSubnetTwoCIDR:
+    Type: String
+    Description: IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Default: '10.0.1.0/24'
+  PrivateSubnetOneCIDR:
+    Type: String
+    Description: range (CIDR notation) for the private subnet in the first Availability Zone
+    Default: '10.0.2.0/24'
+  PrivateSubnetTwoCIDR:
+    Type: String
+    Description: IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Default: '10.0.3.0/24'
+    
+Resources:
+
+###
+# VPC
+###
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: !Ref VpcCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}
+
+  PublicSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref PublicSubnetOneCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-public1
+  PublicSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref PublicSubnetTwoCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-public2
+
+  PrivateSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref PrivateSubnetOneCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-private1
+
+  PrivateSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref PrivateSubnetTwoCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-private2
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}
+
+  GatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref 'VPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-public
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachement
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+
+  PublicSubnetOneRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetOne
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetTwoRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetTwo
+      RouteTableId: !Ref PublicRouteTable
+  
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-private1
+
+  PrivateRouteTableOneAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetOne
+
+  PrivateRouteTableTwoAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetTwo
+
+###
+# VPC Endpoints
+###
+
+  S3VPCEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcId: !Ref 'VPC'
+      RouteTableIds: 
+        - !Ref PrivateRouteTable
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+
+  EcrDkrVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref FargateContainerSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnetOne
+        - !Ref PrivateSubnetTwo
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  EcrApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref FargateContainerSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnetOne
+        - !Ref PrivateSubnetTwo
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  LogsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref FargateContainerSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnetOne
+        - !Ref PrivateSubnetTwo
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  ####
+  # ALB related resources
+  ####
+  PublicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+
+  
+  PublicLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-alb
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        - !Ref 'PublicSubnetOne'
+        - !Ref 'PublicSubnetTwo'
+      SecurityGroups: [!Ref 'PublicLoadBalancerSG']
+
+  ####
+  # WAF
+  ####
+
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-webacl
+      Scope: REGIONAL
+      Description: Public Application Network Web ACL using AWS Managed Rules.
+      DefaultAction: 
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Join
+            - ""
+            - - Web-ACL
+              - "Metric"
+      Rules: 
+        - Name: AWS-AWSManagedRulesAmazonIpReputationList
+          Priority: 2
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MetricForAMRIPRepList
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+        - Name: AWS-AWSManagedRulesAnonymousIpList
+          Priority: 3
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MetricForAMRAnonIpList
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAnonymousIpList
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 4
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MetricForAMRCRS
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet 
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 5
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MetricForAMRKnownBadInputs
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet 
+        - Name: AWS-AWSManagedRulesAdminProtectionRuleSet
+          Priority: 6
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: MetricForAMRAdminProtection
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAdminProtectionRuleSet 
+
+  WebACLAssociation:
+    Type: 'AWS::WAFv2::WebACLAssociation'
+    Properties:
+      WebACLArn: !GetAtt WebACL.Arn
+      ResourceArn: !GetAtt PublicLoadBalancer.LoadBalancerArn
+  
+  PublicLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - PublicLoadBalancer
+    Properties:
+      LoadBalancerArn: !Ref 'PublicLoadBalancer'
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: 'text/plain'
+            MessageBody: 'Service is not yet available, please try again later.'
+            StatusCode: '503'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Name: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-http
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref 'VPC'
+
+
+  ####
+  # ECS related resources
+  ####
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-ecs
+      
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the containers
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref 'PublicLoadBalancerSG'
+        
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - LogsVpcEndpoint
+    Properties:
+      Family: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-nginx
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt 'ECSTaskExecutionRole.Arn'
+      ContainerDefinitions:
+        - Name: nginx
+          Cpu: 256
+          Memory: 512
+          Image: !Sub ${EcrRepositoryUri}
+          PortMappings:
+            - ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-nginx
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: LoadBalancerRule
+    Properties:
+      ServiceName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-nginx
+      Cluster: !Ref 'ECSCluster'
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups: 
+            - !Ref 'FargateContainerSecurityGroup'
+          Subnets: 
+            - !Ref 'PrivateSubnetOne'
+            - !Ref 'PrivateSubnetTwo'
+      TaskDefinition: !Ref 'TaskDefinition'
+      LoadBalancers:
+        - ContainerName: nginx
+          ContainerPort: 80
+          TargetGroupArn: !Ref 'TargetGroup'
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref AWS::StackName
+      RetentionInDays: 365
+
+  # Auto-Scaling
+  AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [application-autoscaling.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: service-autoscaling
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - 'application-autoscaling:*'
+              - 'cloudwatch:DescribeAlarms'
+              - 'cloudwatch:PutMetricAlarm'
+              - 'ecs:DescribeServices'
+              - 'ecs:UpdateService'
+            Resource: '*'
+
+  EcsScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: 'ecs'
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ResourceId: !Sub 'service/${ECSCluster}/${Service.Name}'
+      MinCapacity: 2
+      MaxCapacity: 10
+      RoleARN: !GetAtt AutoscalingRole.Arn
+
+  EcsScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: cpu75-target-tracking-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref EcsScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 75.0
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+      
+  # Create a rule on the load balancer for routing traffic to the target group
+  LoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'TargetGroup'
+          Type: 'forward'
+      Conditions:
+        - Field: path-pattern
+          Values: ['*']
+      ListenerArn: !Ref PublicLoadBalancerListener
+      Priority: 1
+
+  
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-ecs
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-ecs
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+  # This is a role which is used by the ECS tasks themselves.
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-ecs-task-execution
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${Project}-${RegionAlias}-${EnvironmentName}-ecs-task-execution
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # Allow the ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+
+                # Allow the ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+###
+# CloudWatch Alarms
+###
+
+  AlbLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ALB Latency
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      AlarmDescription: Latency exceeds 100s alarm
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      Dimensions:
+        - Name: LoadBalancerName
+          Value: !Ref PublicLoadBalancer
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 100
+      Statistic: Average
+      Period: 60     
+      Unit: Seconds
+      ActionsEnabled: false
+      # AlarmActions: could trigger an SNS notification or some treatment you might want
+
+  Http5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Http5xxAlarm
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions:
+        - Name: LoadBalancerName
+          Value: !Ref PublicLoadBalancer
+      Statistic: Sum
+      Period: 300
+      Threshold: 10
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      EvaluationPeriods: 1
+      TreatMissingData: "notBreaching"
+      ActionsEnabled: false
+      # AlarmActions: could trigger an SNS notification or some treatment you might want
+
+  Http4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Http4xxAlarm
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_4XX_Count
+      Dimensions:
+        - Name: LoadBalancerName
+          Value: !Ref PublicLoadBalancer
+      Statistic: Sum
+      Period: 300
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      TreatMissingData: notBreaching
+      ActionsEnabled: false
+      # AlarmActions: could trigger an SNS notification or some treatment you might want
+
+######################################
+Outputs:
+  VpcId:
+    Description: The ID of the VPC that this stack is deployed in
+    Value: !Ref 'VPC'
+  PublicSubnetOne:
+    Description: Public subnet one
+    Value: !Ref 'PublicSubnetOne'
+  PublicSubnetTwo:
+    Description: Public subnet two
+    Value: !Ref 'PublicSubnetTwo'
+  PrivateSubnetOne:
+    Description: Private subnet one
+    Value: !Ref 'PrivateSubnetOne'
+  PrivateSubnetTwo:
+    Description: Private subnet two
+    Value: !Ref 'PrivateSubnetTwo'
+  ExternalUrl:
+    Description: The url of the external load balancer
+    Value: !Sub http://${PublicLoadBalancer.DNSName}
