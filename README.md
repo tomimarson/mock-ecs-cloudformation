@@ -164,4 +164,6 @@ As this project is a test of my skills and I currently cannot spend too much tim
 
 ![tree](media/tree.png) 
 
-Lastly, I would like to clarify that I generally do not use Cloudformation. I usually use Terraform for bigger projects. I find it to be a more comprehensive tool with greater modularity, granularity, reusability, more integrations and less bias. Additionally, It can be used for other cloud providers and for platform-level management.
+Lastly, it's worth noting that I tend to favor Terraform over CloudFormation. I find it to be a more comprehensive tool with greater modularity, more integrations, bigger community and less bias. Additionally, It can be used for other cloud providers and for platform-level management.
+
+The project was deployed and everything works properly. If you want a live demonstration I would be glad to show it.
