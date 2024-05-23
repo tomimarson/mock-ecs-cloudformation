@@ -1,7 +1,5 @@
 # Mock ECS Cloudformation template
 
-This project was created as a technical test for the company Mozio to demonstrate expertise in DevOps, particularly AWS.
-
 ## Requirements
 
 ```
@@ -31,25 +29,6 @@ This project was created as a technical test for the company Mozio to demonstrat
 6. Monitoring and Logging:
     - Implement basic logging for the application using AWS CloudWatch Logs.
     - Configure CloudWatch Alarms to monitor key performance metrics.
-
-Deliverables:
-
-1. CloudFormation Template:
-    - Include all necessary AWS resources for the deployment.
-    - Clearly document each resource and its purpose.
-    - Parameterize aspects such as VPC CIDR, subnet configurations, container image, etc.
-2. README Documentation:
-    - Provide clear instructions on how to deploy the CloudFormation stack.
-    - Include any prerequisites and steps for customization.
-3. Demonstration:
-    - Deploy the CloudFormation stack in a test environment.
-    - Validate the application's functionality.
-    - Provide any additional notes or considerations regarding the implementation.
-
-Submission Instructions:
-    - Create a GitHub repository.
-    - Submit all your code;
-    - Share the link with us.
 ```
 
 ## Introduction
@@ -151,7 +130,7 @@ Consider adding the "--profile" param if it is not being executed in a CloudShel
 
 ## Important things to mention
 
-As this project is a test of my skills and I currently cannot spend too much time on it, there are several things that I would implement in a real-world project but had to set aside on this test. Some of these are:
+In a real-world project some important things to keep in mind:
 
 - Pipeline for IaC and for the Webapp.
 - Scanning tools such as [checkov](https://checkov.io), [kics](https://github.com/Checkmarx/kics), [trivy](https://github.com/aquasecurity/trivy), among others. For the security tools, an implementation of [defect dojo](https://www.defectdojo.org/) for managing vulnerabilities is what I usually do.
@@ -165,5 +144,3 @@ As this project is a test of my skills and I currently cannot spend too much tim
 ![tree](media/tree.png) 
 
 Lastly, it's worth noting that I tend to favor Terraform over CloudFormation. I find it to be a more comprehensive tool with greater modularity, more integrations, bigger community and less bias. Additionally, It can be used for other cloud providers and for platform-level management.
-
-The project was deployed and everything works properly. If you want a live demonstration I would be glad to show it.
